@@ -7,7 +7,12 @@ const subtitle = require('subtitle')
 
 const app = express()
 const port = 3000
-let mediaDir = ''
+let mediaDir = process.argv[2]
+
+if (!mediaDir) {
+	console.error('Please provide the path to the media folder as an argument.')
+	process.exit(1)
+}
 
 app.use(express.static(path.join(__dirname, 'public')))
 
@@ -19,7 +24,6 @@ app.get('/video/:mkv', (req, res) => {
 
 app.get('/subtitles/:srt', (req, res) => {
 	const srtPath = path.join(mediaDir, req.params.srt)
-	console.log(srtPath)
 	if (!fs.existsSync(srtPath)) return res.status(404).send('Not found')
 	const srtContent = fs.readFileSync(srtPath, 'utf-8')
 	const cues = subtitle.parse(srtContent)
@@ -52,30 +56,12 @@ function normalizePath(raw) {
 	return input
 }
 
-function askFolder() {
-	return require('inquirer').prompt([
-		{
-			type: 'input',
-			name: 'folder',
-			message: 'Enter the full path to the folder with your MKV and SRT files:',
-			filter: normalizePath,
-			validate: raw => {
-				const input = normalizePath(raw)
-				try {
-					return fs.existsSync(input) && fs.lstatSync(input).isDirectory()
-						? true
-						: `Invalid folder: ${input}`
-				} catch {
-					return `Invalid folder: ${input}`
-				}
-			}
-		}
-	])
+mediaDir = normalizePath(mediaDir)
+if (!fs.existsSync(mediaDir) || !fs.lstatSync(mediaDir).isDirectory()) {
+	console.error(`Invalid folder: ${mediaDir}`)
+	process.exit(1)
 }
 
-askFolder().then(answer => {
-	mediaDir = path.resolve(answer.folder)
-	app.listen(port, () => {
-		console.log(`Server running at http://localhost:${port}`)
-	})
+app.listen(port, () => {
+	console.log(`Server running at http://localhost:${port}`)
 })
