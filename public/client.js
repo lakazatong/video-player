@@ -85,6 +85,13 @@ document.addEventListener('keydown', e => {
 	}
 })
 
+document.addEventListener('visibilitychange', () => {
+	if (document.hidden) {
+		video.pause()
+	} else {
+		video.play()
+	}
+})
 
 window.onload = () => {
 	burgerMessage.style.display = 'block'
