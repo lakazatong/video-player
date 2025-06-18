@@ -9,11 +9,8 @@ let dummyDiv = document.getElementById('dummy')
 let episodes = []
 let index = 0
 let cues = []
-let subtitlesActive = true
-let currentSubtitles = ''
+
 let paused = true
-let cursorTimeout
-let dummyBool
 
 let currentBase = ''
 let currentStartTime = 0
@@ -61,6 +58,9 @@ function updateUrl() {
 
 /* hide cursor */
 
+let cursorTimeout
+let dummyBool
+
 function resetCursorTimer(force = true) {
 	if (force || !cursorTimeout) {
 		clearTimeout(cursorTimeout)
@@ -92,6 +92,9 @@ setInterval(() => {
 }, 300)
 
 /* update subtitles */
+
+let subtitlesActive = true
+let currentSubtitles = ''
 
 video.ontimeupdate = () => {
 	let t = video.currentTime * 1000
@@ -221,17 +224,37 @@ setTimeout(() => {
 	burgerMessage.style.display = 'none'
 }, 5100)
 
-/* pause when hovering subtitles */
+/* pause when yomitan'ing */
+
+let onSubs = false
+
+function getSelect() {
+	return window.getSelection().toString().trim()
+}
 
 subDiv.addEventListener('mouseenter', () => {
 	if (!paused) {
 		video.pause()
 		paused = true
 	}
+	onSubs = true
 })
 
 subDiv.addEventListener('mouseleave', () => {
-	if (paused) {
+	if (paused && getSelect().length === 0) {
+		video.play()
+		paused = false
+	}
+	onSubs = false
+})
+
+document.addEventListener('selectionchange', () => {
+	if (getSelect()) {
+		if (!paused) {
+			video.pause()
+			paused = true
+		}
+	} else if (paused && !onSubs) {
 		video.play()
 		paused = false
 	}
