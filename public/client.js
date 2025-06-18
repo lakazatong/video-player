@@ -1,84 +1,84 @@
-'use strict'
+"use strict";
 
-let video = document.getElementById('video')
-let subDiv = document.getElementById('subtitles')
-let helpDiv = document.getElementById('help')
-let burgerMessage = document.getElementById('burger-message')
-let dummyDiv = document.getElementById('dummy')
+let video = document.getElementById("video");
+let subDiv = document.getElementById("subtitles");
+let helpDiv = document.getElementById("help");
+let burgerMessage = document.getElementById("burger-message");
+let dummyDiv = document.getElementById("dummy");
 
-let episodes = []
-let index = 0
-let cues = []
+let episodes = [];
+let index = 0;
+let cues = [];
 
-let paused = true
+let paused = true;
 
-let currentBase = ''
-let currentStartTime = 0
-let currentEndTime = 0
+let currentBase = "";
+let currentStartTime = 0;
+let currentEndTime = 0;
 
-fetch('/episodes')
-	.then(res => res.json())
-	.then(data => {
-		episodes = data
-		loadEpisode(index)
-	})
+fetch("/episodes")
+	.then((res) => res.json())
+	.then((data) => {
+		episodes = data;
+		loadEpisode(index);
+	});
 
 /* episode change */
 
 function loadEpisode(i) {
 	if (i < 0) {
-		index = episodes.length - 1
+		index = episodes.length - 1;
 	} else if (i >= episodes.length) {
-		index = 0
+		index = 0;
 	} else {
-		index = i
+		index = i;
 	}
-	
-	currentBase = episodes[index]
-	if (!currentBase) return
-	video.src = `/video/${currentBase}`
-	fetch( `/subtitles/${currentBase}`)
-		.then(res => res.json())
-		.then(data => {
-			cues = data
-		})
-	
-	updateUrl()
+
+	currentBase = episodes[index];
+	if (!currentBase) return;
+	video.src = `/video/${currentBase}`;
+	fetch(`/subtitles/${currentBase}`)
+		.then((res) => res.json())
+		.then((data) => {
+			cues = data;
+		});
+
+	updateUrl();
 }
 
 /* update URL with current state */
 
 function updateUrl() {
-	const url = new URL(window.location)
-	url.searchParams.set('currentBase', currentBase)
-	url.searchParams.set('currentStartTime', currentStartTime)
-	url.searchParams.set('currentEndTime', currentEndTime)
-	history.pushState(null, '', url.toString())
+	const url = new URL(window.location);
+	url.searchParams.set("currentBase", currentBase);
+	url.searchParams.set("currentStartTime", currentStartTime);
+	url.searchParams.set("currentEndTime", currentEndTime);
+	history.pushState(null, "", url.toString());
 }
 
 /* hide cursor */
 
-let cursorTimeout
-let dummyBool
+let cursorTimeout;
+let dummyBool;
 
 function resetCursorTimer(force = true) {
 	if (force || !cursorTimeout) {
-		clearTimeout(cursorTimeout)
-		cursorTimeout = null
+		clearTimeout(cursorTimeout);
+		cursorTimeout = null;
 		cursorTimeout = setTimeout(() => {
-			if (!subDiv.matches(':hover') && !paused) {
-				video.classList.add('hide-cursor')
+			if (!subDiv.matches(":hover") && !paused) {
+				video.classList.add("hide-cursor");
 			}
-		}, 1500)
+		}, 1500);
 	}
 }
 
-resetCursorTimer()
+resetCursorTimer();
 
-document.addEventListener('mousemove', () => {
-	video.classList.remove('hide-cursor')
-	resetCursorTimer()
-})
+document.addEventListener("mousemove", () => {
+	video.classList.remove("hide-cursor");
+	resetCursorTimer();
+});
 
 // helps when exiting/entering fullscreen, cursor shows up again, this updates the page
 // comment it and the cursor can end up being stuck shown even though the hide-cursor class
@@ -86,176 +86,185 @@ document.addEventListener('mousemove', () => {
 // when subtitles are on, they trigger events themselves by showing/hiding the subtitle div
 setInterval(() => {
 	if (!paused) {
-		dummyBool = !dummyBool
-		dummyDiv.style.display = (dummyBool) ? 'block' : 'none'
+		dummyBool = !dummyBool;
+		dummyDiv.style.display = dummyBool ? "block" : "none";
 	}
-}, 300)
+}, 300);
 
 /* update subtitles */
 
-let subtitlesActive = true
-let currentSubtitles = ''
+let subtitlesActive = true;
+let currentSubtitles = "";
 
 video.ontimeupdate = () => {
-	let t = video.currentTime * 1000
-	let cue = cues.find(c => t >= c.start && t <= c.end)
-	let newSubtitle = cue ? cue.text.replace(/\r?\n/g, '\n') : ''
+	let t = video.currentTime * 1000;
+	let cue = cues.find((c) => t >= c.start && t <= c.end);
+	let newSubtitle = cue ? cue.text.replace(/\r?\n/g, "\n") : "";
+
 	if (newSubtitle !== currentSubtitles) {
-		subDiv.innerText = newSubtitle
-		currentSubtitles = newSubtitle
+		subDiv.innerText = newSubtitle;
+		currentSubtitles = newSubtitle;
+
 		if (currentSubtitles.length === 0) {
-			subDiv.style.display = 'none'
-			video.classList.add('hide-cursor')
+			subDiv.style.display = "none";
+			video.classList.add("hide-cursor");
 		} else {
 			if (subtitlesActive) {
-				subDiv.style.display = 'block'
+				subDiv.style.display = "block";
 			}
-			resetCursorTimer(false)
+			resetCursorTimer(false);
 		}
 
 		if (cue) {
-			currentStartTime = cue.start
-			currentEndTime = cue.end
+			const currentCueIndex = cues.indexOf(cue);
+			const previousCue = cues[currentCueIndex - 1];
+			const nextCue = cues[currentCueIndex + 1];
+
+			currentStartTime = previousCue ? previousCue.start : cue.start;
+			currentEndTime = nextCue ? nextCue.end : cue.end;
 		} else {
-			currentStartTime = 0
-			currentEndTime = 0
+			currentStartTime = 0;
+			currentEndTime = 0;
 		}
-		updateUrl()
+
+		updateUrl();
 	}
-}
+};
 
 /* keybinds */
 
 function togglePlay(e) {
-	e.preventDefault()
+	e.preventDefault();
 	if (video.paused) {
-		video.play()
-		paused = false
-		resetCursorTimer(false)
+		video.play();
+		paused = false;
+		resetCursorTimer(false);
 	} else {
-		video.pause()
-		paused = true
+		video.pause();
+		paused = true;
 	}
 }
 
 function toggleFullscreen() {
-	const hadHideCursor = video.classList.contains('hide-cursor')
+	const hadHideCursor = video.classList.contains("hide-cursor");
 
 	const restoreCursor = () => {
 		if (hadHideCursor) {
-			video.classList.remove('hide-cursor')
+			video.classList.remove("hide-cursor");
 			setTimeout(() => {
-				video.classList.add('hide-cursor')
-			}, 1500)
+				video.classList.add("hide-cursor");
+			}, 1500);
 		}
-	}
+	};
 
 	if (!document.fullscreenElement) {
-		document.documentElement.requestFullscreen()
-		.then(restoreCursor)
-		.catch((err) => console.log(err))
+		document.documentElement
+			.requestFullscreen()
+			.then(restoreCursor)
+			.catch((err) => console.log(err));
 	} else {
-		document.exitFullscreen()
-		.then(restoreCursor)
-		.catch((err) => console.log(err))
+		document
+			.exitFullscreen()
+			.then(restoreCursor)
+			.catch((err) => console.log(err));
 	}
 }
 
 function toggleSubtitles() {
-	subtitlesActive = !subtitlesActive
-	subDiv.style.display = (subtitlesActive && currentSubtitles.length > 0) ? 'block' : 'none'
+	subtitlesActive = !subtitlesActive;
+	subDiv.style.display = subtitlesActive && currentSubtitles.length > 0 ? "block" : "none";
 }
 
 function toggleHelp() {
-	helpDiv.style.display = (helpDiv.style.display === 'flex') ? 'none' : 'flex'
+	helpDiv.style.display = helpDiv.style.display === "flex" ? "none" : "flex";
 }
 
-document.addEventListener('keydown', e => {
+document.addEventListener("keydown", (e) => {
 	switch (e.key) {
-		case ' ':
-			togglePlay(e)
-			break
-		case 'n':
-		case 'N':
-			loadEpisode(index + 1)
-			break
-		case 'p':
-		case 'P':
-			loadEpisode(index - 1)
-			break
-		case 'f':
-		case 'F':
-			toggleFullscreen()
-			break
-		case 'v':
-		case 'V':
-			toggleSubtitles()
-			break
-		case 'h':
-		case 'H':
-			toggleHelp()
-			break
-		case 'ArrowRight':
-			video.currentTime += 5
-			break
-		case 'ArrowLeft':
-			video.currentTime -= 5
-			break
+		case " ":
+			togglePlay(e);
+			break;
+		case "n":
+		case "N":
+			loadEpisode(index + 1);
+			break;
+		case "p":
+		case "P":
+			loadEpisode(index - 1);
+			break;
+		case "f":
+		case "F":
+			toggleFullscreen();
+			break;
+		case "v":
+		case "V":
+			toggleSubtitles();
+			break;
+		case "h":
+		case "H":
+			toggleHelp();
+			break;
+		case "ArrowRight":
+			video.currentTime += 5;
+			break;
+		case "ArrowLeft":
+			video.currentTime -= 5;
+			break;
 	}
-})
+});
 
 /* pause when tabbed out */
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener("visibilitychange", () => {
 	if (document.hidden && !paused) {
-		video.pause()
+		video.pause();
 	} else if (!paused) {
-		video.play()
+		video.play();
 	}
-})
+});
 
 /* show burger message */
 
-burgerMessage.style.display = 'block'
+burgerMessage.style.display = "block";
 setTimeout(() => {
-	burgerMessage.style.opacity = '0'
-}, 100)
+	burgerMessage.style.opacity = "0";
+}, 100);
 setTimeout(() => {
-	burgerMessage.style.display = 'none'
-}, 5100)
+	burgerMessage.style.display = "none";
+}, 5100);
 
 /* pause when yomitan'ing */
 
-let onSubs = false
+let onSubs = false;
 
 function getSelect() {
-	return window.getSelection().toString().trim()
+	return window.getSelection().toString().trim();
 }
 
-subDiv.addEventListener('mouseenter', () => {
+subDiv.addEventListener("mouseenter", () => {
 	if (!paused) {
-		video.pause()
-		paused = true
+		video.pause();
+		paused = true;
 	}
-	onSubs = true
-})
+	onSubs = true;
+});
 
-subDiv.addEventListener('mouseleave', () => {
+subDiv.addEventListener("mouseleave", () => {
 	if (paused && getSelect().length === 0) {
-		video.play()
-		paused = false
+		video.play();
+		paused = false;
 	}
-	onSubs = false
-})
+	onSubs = false;
+});
 
-document.addEventListener('selectionchange', () => {
+document.addEventListener("selectionchange", () => {
 	if (getSelect()) {
 		if (!paused) {
-			video.pause()
-			paused = true
+			video.pause();
+			paused = true;
 		}
 	} else if (paused && !onSubs) {
-		video.play()
-		paused = false
+		video.play();
+		paused = false;
 	}
-})
+});
