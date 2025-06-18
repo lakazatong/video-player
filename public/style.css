@@ -4,6 +4,10 @@ body {
 	overflow: hidden;
 }
 
+body.hide-cursor {
+	cursor: none;
+}
+
 video {
 	position: fixed;
 	width: 100vw;
@@ -14,12 +18,15 @@ video {
 #subtitles {
 	display: block;
 	position: fixed;
-	bottom: 10%;
-	width: 100%;
+	bottom: 5%;
+	left: 50%;
+	transform: translateX(-50%);
+	width: auto;
+	max-width: 90%;
 	text-align: center;
 	color: white;
 	font-size: 24px;
-	background: rgba(0, 0, 0, 0.5);
+	background: rgba(0, 0, 0, 0.3);
 	font-family: sans-serif;
 	user-select: text;
 	padding: 0.5em;
