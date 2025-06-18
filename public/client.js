@@ -10,10 +10,14 @@ let episodes = []
 let index = 0
 let cues = []
 let subtitlesActive = true
-let currentSubtitle = ''
+let currentSubtitles = ''
 let paused = true
 let cursorTimeout
 let dummyBool
+
+let currentBase = ''
+let currentStartTime = 0
+let currentEndTime = 0
 
 fetch('/episodes')
 	.then(res => res.json())
@@ -33,13 +37,26 @@ function loadEpisode(i) {
 		index = i
 	}
 	
-	if (!episodes[index]) return
-	video.src = episodes[index].video
-	fetch(episodes[index].subtitles)
+	currentBase = episodes[index]
+	if (!currentBase) return
+	video.src = `/video/${currentBase}`
+	fetch( `/subtitles/${currentBase}`)
 		.then(res => res.json())
 		.then(data => {
 			cues = data
 		})
+	
+	updateUrl()
+}
+
+/* update URL with current state */
+
+function updateUrl() {
+	const url = new URL(window.location)
+	url.searchParams.set('currentBase', currentBase)
+	url.searchParams.set('currentStartTime', currentStartTime)
+	url.searchParams.set('currentEndTime', currentEndTime)
+	history.pushState(null, '', url.toString())
 }
 
 /* hide cursor */
@@ -56,12 +73,12 @@ function resetCursorTimer(force = true) {
 	}
 }
 
+resetCursorTimer()
+
 document.addEventListener('mousemove', () => {
 	video.classList.remove('hide-cursor')
 	resetCursorTimer()
 })
-
-resetCursorTimer()
 
 // helps when exiting/entering fullscreen, cursor shows up again, this updates the page
 // comment it and the cursor can end up being stuck shown even though the hide-cursor class
@@ -80,10 +97,10 @@ video.ontimeupdate = () => {
 	let t = video.currentTime * 1000
 	let cue = cues.find(c => t >= c.start && t <= c.end)
 	let newSubtitle = cue ? cue.text.replace(/\r?\n/g, '\n') : ''
-	if (newSubtitle !== currentSubtitle) {
+	if (newSubtitle !== currentSubtitles) {
 		subDiv.innerText = newSubtitle
-		currentSubtitle = newSubtitle
-		if (currentSubtitle.length === 0) {
+		currentSubtitles = newSubtitle
+		if (currentSubtitles.length === 0) {
 			subDiv.style.display = 'none'
 			video.classList.add('hide-cursor')
 		} else {
@@ -92,6 +109,15 @@ video.ontimeupdate = () => {
 			}
 			resetCursorTimer(false)
 		}
+
+		if (cue) {
+			currentStartTime = cue.start
+			currentEndTime = cue.end
+		} else {
+			currentStartTime = 0
+			currentEndTime = 0
+		}
+		updateUrl()
 	}
 }
 
@@ -134,7 +160,7 @@ function toggleFullscreen() {
 
 function toggleSubtitles() {
 	subtitlesActive = !subtitlesActive
-	subDiv.style.display = (subtitlesActive && currentSubtitle.length > 0) ? 'block' : 'none'
+	subDiv.style.display = (subtitlesActive && currentSubtitles.length > 0) ? 'block' : 'none'
 }
 
 function toggleHelp() {
@@ -187,12 +213,10 @@ document.addEventListener('visibilitychange', () => {
 
 /* show burger message */
 
-window.onload = () => {
-	burgerMessage.style.display = 'block'
-	setTimeout(() => {
-		burgerMessage.style.opacity = '0'
-	}, 100)
-	setTimeout(() => {
-		burgerMessage.style.display = 'none'
-	}, 5100)
-}
+burgerMessage.style.display = 'block'
+setTimeout(() => {
+	burgerMessage.style.opacity = '0'
+}, 100)
+setTimeout(() => {
+	burgerMessage.style.display = 'none'
+}, 5100)

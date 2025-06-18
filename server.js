@@ -1,29 +1,41 @@
 'use strict'
 
-const express = require('express')
-const fs = require('fs')
-const path = require('path')
-const subtitle = require('subtitle')
+require('dotenv').config()
 
-const app = express()
-const port = 3000
+const path = require('path')
+
 let mediaDir = process.argv[2]
+let ankiMediaDir = process.env.ANKI_MEDIA_FOLDER || path.join(process.env.APPDATA, 'Roaming', 'Anki2', 'User 1', 'collection.media')
+let currentBase
+let currentStartTime
+let currentEndTime
 
 if (!mediaDir) {
-	console.error('Please provide the path to the media folder as an argument.')
+	console.error('Please provide full path of the videos/subtitles folder as an argument.')
 	process.exit(1)
 }
 
-app.use(express.static(path.join(__dirname, 'public')))
+const express = require('express')
+const fs = require('fs')
+const subtitle = require('subtitle')
+const { exec } = require('child_process')
 
-app.get('/video/:mkv', (req, res) => {
-	const filePath = path.join(mediaDir, req.params.mkv)
+const app = express()
+const port = process.env.SERVER_PORT
+
+app.use(express.static(path.join(__dirname, 'public')))
+app.use(express.json())
+
+app.get('/video/:base', (req, res) => {
+	console.log(`Server: /video/${req.params.base}`)
+	const filePath = path.join(mediaDir, `${req.params.base}.mkv`)
 	if (fs.existsSync(filePath)) res.sendFile(filePath)
 	else res.status(404).send('Not found')
 })
 
-app.get('/subtitles/:srt', (req, res) => {
-	const srtPath = path.join(mediaDir, req.params.srt)
+app.get('/subtitles/:base', (req, res) => {
+	console.log(`Server: /subtitles/${req.params.base}`)
+	const srtPath = path.join(mediaDir, `${req.params.base}.srt`)
 	if (!fs.existsSync(srtPath)) return res.status(404).send('Not found')
 	const srtContent = fs.readFileSync(srtPath, 'utf-8')
 	const cues = subtitle.parse(srtContent)
@@ -31,17 +43,50 @@ app.get('/subtitles/:srt', (req, res) => {
 })
 
 app.get('/episodes', (req, res) => {
+	console.log(`Server: /episodes`)
 	const files = fs.readdirSync(mediaDir)
 	const mkvs = files.filter(f => f.endsWith('.mkv')).sort()
 	const episodes = mkvs.map(f => {
 		const base = f.replace(/\.mkv$/, '')
-		return {
-			video: `/video/${base}.mkv`,
-			subtitles: `/subtitles/${base}.srt`
-		}
+		return base
 	})
 	res.json(episodes)
 })
+
+app.post('/clip', (req, res) => {
+	console.log(`Server: /clip`, req.body)
+	const { base, startTime, endTime } = req.body
+	if (!base || !startTime || !endTime) {
+		return res.status(400).json({ error: 'base, startTime and endTime are required' })
+	}
+
+	const videoFile = path.join(mediaDir, `${base}.mkv`)
+
+	if (!fs.existsSync(videoFile)) {
+		return res.status(404).json({ error: `${videoFile} not found` })
+	}
+
+	const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.mp4`)
+
+	const ffmpegCommand = buildFFmpegCommand(videoFile, outputFile, startTime, endTime)
+
+	exec(ffmpegCommand, (error, stdout, stderr) => {
+		if (error) {
+			return res.status(500).json({ error: `FFmpeg error: ${stderr}` })
+		}
+
+		res.json({ message: 'Video clipped successfully' })
+	})
+})
+
+function getSubtitleForTimestamp(timestamp, cues) {
+	const timestampInMs = timestamp * 1000
+	return cues.find(cue => cue.start <= timestampInMs && cue.end >= timestampInMs)
+}
+
+function buildFFmpegCommand(inputFile, outputFile, startTime, endTime) {
+    return `ffmpeg -i ${inputFile} -c:v libx264 -preset veryslow -crf 23 -vf "scale=-1:720" -ss ${startTime} -to ${endTime} -c:a aac -b:a 128k -movflags faststart ${outputFile}`
+}
 
 function normalizePath(raw) {
 	let input = raw.trim()
@@ -58,10 +103,12 @@ function normalizePath(raw) {
 
 mediaDir = normalizePath(mediaDir)
 if (!fs.existsSync(mediaDir) || !fs.lstatSync(mediaDir).isDirectory()) {
-	console.error(`Invalid folder: ${mediaDir}`)
+	console.error(`Server: Invalid folder: ${mediaDir}`)
 	process.exit(1)
 }
 
 app.listen(port, () => {
-	console.log(`Server running at http://localhost:${port}`)
+	console.log(`Server: running at http://localhost:${port}`)
 })
+
+require('./proxy')
