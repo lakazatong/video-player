@@ -3,6 +3,12 @@
 require('dotenv').config()
 
 const path = require('path')
+const fs = require('fs')
+const express = require('express')
+const subtitle = require('subtitle')
+const { exec } = require('child_process')
+
+/* args */
 
 let mediaDir = process.argv[2]
 let ankiMediaDir = process.env.ANKI_MEDIA_FOLDER || path.join(process.env.APPDATA, 'Roaming', 'Anki2', 'User 1', 'collection.media')
@@ -15,16 +21,29 @@ if (!mediaDir) {
 	process.exit(1)
 }
 
-const express = require('express')
-const fs = require('fs')
-const subtitle = require('subtitle')
-const { exec } = require('child_process')
+/* unix-ify paths */
+
+mediaDir = normalizePath(mediaDir)
+if (!fs.existsSync(mediaDir) || !fs.lstatSync(mediaDir).isDirectory()) {
+	console.error(`Server: Invalid folder: ${mediaDir}`)
+	process.exit(1)
+}
+
+ankiMediaDir = normalizePath(ankiMediaDir)
+if (!fs.existsSync(ankiMediaDir) || !fs.lstatSync(ankiMediaDir).isDirectory()) {
+	console.error(`Server: Invalid folder: ${ankiMediaDir}`)
+	process.exit(1)
+}
+
+/* init */
 
 const app = express()
 const port = process.env.SERVER_PORT
 
 app.use(express.static(path.join(__dirname, 'public')))
 app.use(express.json())
+
+/* endpoints */
 
 app.get('/video/:base', (req, res) => {
 	console.log(`Server: /video/${req.params.base}`)
@@ -69,6 +88,7 @@ app.post('/clip', (req, res) => {
 	const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.mp4`)
 
 	const ffmpegCommand = buildFFmpegCommand(videoFile, outputFile, startTime, endTime)
+	console.log(ffmpegCommand)
 
 	exec(ffmpegCommand, (error, stdout, stderr) => {
 		if (error) {
@@ -79,13 +99,31 @@ app.post('/clip', (req, res) => {
 	})
 })
 
-function getSubtitleForTimestamp(timestamp, cues) {
-	const timestampInMs = timestamp * 1000
-	return cues.find(cue => cue.start <= timestampInMs && cue.end >= timestampInMs)
+/* main */
+
+app.listen(port, () => {
+	console.log(`Server: running at http://localhost:${port}`)
+})
+
+require('./proxy')
+
+/* utils */
+
+// function getSubtitleForTimestamp(timestamp, cues) {
+// 	const timestampInMs = timestamp * 1000
+// 	return cues.find(cue => cue.start <= timestampInMs && cue.end >= timestampInMs)
+// }
+
+function msToTime(ms) {
+	let h = Math.floor(ms / 3600000)
+	let m = Math.floor((ms % 3600000) / 60000)
+	let s = Math.floor((ms % 60000) / 1000)
+	let msRemain = ms % 1000
+	return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(msRemain).padStart(3, '0')}`
 }
 
 function buildFFmpegCommand(inputFile, outputFile, startTime, endTime) {
-    return `ffmpeg -i ${inputFile} -c:v libx264 -preset veryslow -crf 23 -vf "scale=-1:720" -ss ${startTime} -to ${endTime} -c:a aac -b:a 128k -movflags faststart ${outputFile}`
+	return `ffmpeg -ss ${msToTime(startTime)} -to ${msToTime(endTime)} -i '${inputFile}' -vf "scale=-2:720" -c:v libx264 -crf 18 -preset veryslow -c:a copy '${outputFile}'`
 }
 
 function normalizePath(raw) {
@@ -100,15 +138,3 @@ function normalizePath(raw) {
 
 	return input
 }
-
-mediaDir = normalizePath(mediaDir)
-if (!fs.existsSync(mediaDir) || !fs.lstatSync(mediaDir).isDirectory()) {
-	console.error(`Server: Invalid folder: ${mediaDir}`)
-	process.exit(1)
-}
-
-app.listen(port, () => {
-	console.log(`Server: running at http://localhost:${port}`)
-})
-
-require('./proxy')

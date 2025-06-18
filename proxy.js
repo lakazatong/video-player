@@ -4,10 +4,15 @@ require('dotenv').config()
 
 const http = require('http')
 const axios = require('axios')
+const he = require('he')
+
+/* args */
 
 const serverPort = process.env.SERVER_PORT
 const ankiPort = process.env.ANKI_PORT
 const proxyPort = process.env.PROXY_PORT
+
+/* proxy */
 
 const server = http.createServer((req, res) => {
 	let body = ''
@@ -23,7 +28,7 @@ const server = http.createServer((req, res) => {
 
 			const urlHtml = data?.params?.note?.fields?.Url
 			const hrefMatch = urlHtml?.match(/href="([^"]+)"/)
-			const actualUrl = hrefMatch?.[1]
+			const actualUrl = hrefMatch ? he.decode(hrefMatch[1]) : undefined
 
 			console.log(`Proxy: received ${JSON.stringify(data?.action === 'multi' ? data?.params?.actions : data?.action)}`, data, urlHtml, actualUrl)
 
@@ -31,13 +36,13 @@ const server = http.createServer((req, res) => {
 				&& req.url === '/'
 				&& (data?.action === 'addNote' || data?.action === 'updateNoteFields')
 				&& actualUrl) {
-				console.log('-----------------------')
+				console.log('\n-----------------------')
 				console.log('Proxy: Request from video-player client:', body)
 				try {
 					const params = new URLSearchParams(actualUrl.split('?')[1])
 					console.log(actualUrl)
 					console.log(params)
-					console.log('-----------------------')
+					console.log('-----------------------\n')
 					const clipResponse = await axios.post(`http://127.0.0.1:${serverPort}/clip`, {
 						base: params.get('currentBase'),
 						startTime: Number(params.get('currentStartTime')),
@@ -87,6 +92,8 @@ const server = http.createServer((req, res) => {
 		console.error('Proxy: Request error:', err)
 	})
 })
+
+/* main */
 
 server.listen(proxyPort, '127.0.0.1', () => {
 	console.log(`Proxy: running at http://127.0.0.1:${proxyPort}`)

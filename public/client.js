@@ -220,3 +220,19 @@ setTimeout(() => {
 setTimeout(() => {
 	burgerMessage.style.display = 'none'
 }, 5100)
+
+/* pause when hovering subtitles */
+
+subDiv.addEventListener('mouseenter', () => {
+	if (!paused) {
+		video.pause()
+		paused = true
+	}
+})
+
+subDiv.addEventListener('mouseleave', () => {
+	if (paused) {
+		video.play()
+		paused = false
+	}
+})
