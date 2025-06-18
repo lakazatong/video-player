@@ -1,0 +1,11 @@
+1. Run `npm i`.
+2. Ensure that the `ANKI_PORT` is set correctly (it should be 8765 by default).
+3. Run `node server.js <path to a folder containing .mkv and .srt files with the same name>`.
+4. A proxy is needed (too lazy to explain it), so go to the Yomitan settings and change the port to PROXY_PORT (8765 by default).
+5. Disconnect and reconnect Anki to be safe.
+6. Use a card type with at least `Url: {url}`.
+7. Go to `localhost:SERVER_PORT` (3000 by default).
+8. Add a card from the subtitles.
+9. It will clip and save to the media folder in Anki or `ANKI_MEDIA_FOLDER`.
+
+**TODO:** Create a minimal card type that supports video.
