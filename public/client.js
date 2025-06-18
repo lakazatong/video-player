@@ -2,7 +2,6 @@
 
 let video = document.getElementById('video')
 let subDiv = document.getElementById('subtitles')
-let controls = document.getElementById('controls')
 let helpDiv = document.getElementById('help')
 let burgerMessage = document.getElementById('burger-message')
 
