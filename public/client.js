@@ -4,13 +4,16 @@ let video = document.getElementById('video')
 let subDiv = document.getElementById('subtitles')
 let helpDiv = document.getElementById('help')
 let burgerMessage = document.getElementById('burger-message')
+let dummyDiv = document.getElementById('dummy')
 
 let episodes = []
 let index = 0
 let cues = []
+let subtitlesActive = true
 let currentSubtitle = ''
 let paused = true
 let cursorTimeout
+let dummyBool
 
 fetch('/episodes')
 	.then(res => res.json())
@@ -30,32 +33,46 @@ function loadEpisode(i) {
 		index = i
 	}
 	
+	if (!episodes[index]) return
 	video.src = episodes[index].video
 	fetch(episodes[index].subtitles)
 		.then(res => res.json())
 		.then(data => {
 			cues = data
-		});
+		})
 }
 
 /* hide cursor */
 
-function resetCursorTimer() {
-	clearTimeout(cursorTimeout)
-	cursorTimeout = setTimeout(() => {
-		if (!subDiv.matches(':hover') && !paused) {
-			document.body.classList.add('hide-cursor')
-		}
-	}, 3000)
+function resetCursorTimer(force = true) {
+	if (force || !cursorTimeout) {
+		clearTimeout(cursorTimeout)
+		cursorTimeout = null
+		cursorTimeout = setTimeout(() => {
+			if (!subDiv.matches(':hover') && !paused) {
+				video.classList.add('hide-cursor')
+			}
+		}, 1500)
+	}
 }
 
 document.addEventListener('mousemove', () => {
-	clearTimeout(cursorTimeout)
-	document.body.classList.remove('hide-cursor')
+	video.classList.remove('hide-cursor')
 	resetCursorTimer()
 })
 
 resetCursorTimer()
+
+// helps when exiting/entering fullscreen, cursor shows up again, this updates the page
+// comment it and the cursor can end up being stuck shown even though the hide-cursor class
+// is there when subtitles are off
+// when subtitles are on, they trigger events themselves by showing/hiding the subtitle div
+setInterval(() => {
+	if (!paused) {
+		dummyBool = !dummyBool
+		dummyDiv.style.display = (dummyBool) ? 'block' : 'none'
+	}
+}, 300)
 
 /* update subtitles */
 
@@ -66,12 +83,15 @@ video.ontimeupdate = () => {
 	if (newSubtitle !== currentSubtitle) {
 		subDiv.innerText = newSubtitle
 		currentSubtitle = newSubtitle
-		if (currentSubtitle === '') {
+		if (currentSubtitle.length === 0) {
 			subDiv.style.display = 'none'
+			video.classList.add('hide-cursor')
 		} else {
-			subDiv.style.display = 'block'
+			if (subtitlesActive) {
+				subDiv.style.display = 'block'
+			}
+			resetCursorTimer(false)
 		}
-		resetCursorTimer()
 	}
 }
 
@@ -82,7 +102,7 @@ function togglePlay(e) {
 	if (video.paused) {
 		video.play()
 		paused = false
-		resetCursorTimer()
+		resetCursorTimer(false)
 	} else {
 		video.pause()
 		paused = true
@@ -90,15 +110,31 @@ function togglePlay(e) {
 }
 
 function toggleFullscreen() {
+	const hadHideCursor = video.classList.contains('hide-cursor')
+
+	const restoreCursor = () => {
+		if (hadHideCursor) {
+			video.classList.remove('hide-cursor')
+			setTimeout(() => {
+				video.classList.add('hide-cursor')
+			}, 1500)
+		}
+	}
+
 	if (!document.fullscreenElement) {
-		document.documentElement.requestFullscreen().catch((err) => console.log(err));
+		document.documentElement.requestFullscreen()
+		.then(restoreCursor)
+		.catch((err) => console.log(err))
 	} else {
-		document.exitFullscreen().catch((err) => console.log(err));
+		document.exitFullscreen()
+		.then(restoreCursor)
+		.catch((err) => console.log(err))
 	}
 }
 
 function toggleSubtitles() {
-	subDiv.style.display = (subDiv.style.display === 'none') ? 'block' : 'none'
+	subtitlesActive = !subtitlesActive
+	subDiv.style.display = (subtitlesActive && currentSubtitle.length > 0) ? 'block' : 'none'
 }
 
 function toggleHelp() {
@@ -108,36 +144,36 @@ function toggleHelp() {
 document.addEventListener('keydown', e => {
 	switch (e.key) {
 		case ' ':
-			togglePlay(e);
-			break;
+			togglePlay(e)
+			break
 		case 'n':
 		case 'N':
-			loadEpisode(index + 1);
-			break;
+			loadEpisode(index + 1)
+			break
 		case 'p':
 		case 'P':
-			loadEpisode(index - 1);
-			break;
+			loadEpisode(index - 1)
+			break
 		case 'f':
 		case 'F':
-			toggleFullscreen();
-			break;
+			toggleFullscreen()
+			break
 		case 'v':
 		case 'V':
-			toggleSubtitles();
-			break;
+			toggleSubtitles()
+			break
 		case 'h':
 		case 'H':
-			toggleHelp();
-			break;
+			toggleHelp()
+			break
 		case 'ArrowRight':
-			video.currentTime += 5;
-			break;
+			video.currentTime += 5
+			break
 		case 'ArrowLeft':
-			video.currentTime -= 5;
-			break;
+			video.currentTime -= 5
+			break
 	}
-});
+})
 
 /* pause when tabbed out */
 

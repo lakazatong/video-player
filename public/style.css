@@ -4,10 +4,6 @@ body {
 	overflow: hidden;
 }
 
-body.hide-cursor {
-	cursor: none;
-}
-
 video {
 	position: fixed;
 	width: 100vw;
@@ -15,8 +11,17 @@ video {
 	object-fit: contain;
 }
 
+video.hide-cursor {
+	cursor: none;
+}
+
+#dummy {
+	display: none;
+	position: fixed;
+}
+
 #subtitles {
-	display: block;
+	display: none;
 	position: fixed;
 	bottom: 5%;
 	left: 50%;
