@@ -13,7 +13,8 @@ const { exec, spawn } = require("child_process");
 
 	let mediaDir = process.argv[2];
 	// Linux
-	let ankiMediaDir = `${process.env.HOME || "~"}/.local/share/Anki2/User 1/collection.media`;
+	let ankiMediaDir =
+		process.env.ANKI_MEDIA_FOLDER || `${process.env.HOME || "~"}/.local/share/Anki2/User 1/collection.media`;
 	if (!fs.existsSync(ankiMediaDir)) {
 		// WSL
 		ankiMediaDir = path.join(
@@ -133,7 +134,7 @@ const { exec, spawn } = require("child_process");
 	function buildFFmpegCommand(inputFile, outputFile, startTime, endTime) {
 		return `ffmpeg -ss ${msToTime(startTime)} -to ${msToTime(
 			endTime
-		)} -i '${inputFile}' -vf "scale=-2:720" -c:v libx264 -crf 18 -preset veryslow -c:a copy '${outputFile}'`;
+		)} -i "${inputFile}" -vf "scale=-2:720" -c:v libx264 -crf 18 -preset veryslow -c:a copy "${outputFile}"`;
 	}
 
 	function normalizePath(raw) {
