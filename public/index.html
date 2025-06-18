@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Video Player</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<video id="video"></video>
+	<div id="subtitles"></div>
+
+	<!-- Burger message -->
+	<div id="burger-message" class="burger-message">Press H to show keybinds</div>
+
+	<!-- Help content -->
+	<div id="help" class="help-container">
+		<div class="help-content">
+			<p>This player is button-free, everything is handled with the following keybinds:</p>
+			<table>
+				<tr>
+					<td><strong>Space</strong></td>
+					<td>Play / Pause</td>
+				</tr>
+				<tr>
+					<td><strong>n</strong></td>
+					<td>Next episode</td>
+				</tr>
+				<tr>
+					<td><strong>p</strong></td>
+					<td>Previous episode</td>
+				</tr>
+				<tr>
+					<td><strong>→</strong></td>
+					<td>Seek forward 5s</td>
+				</tr>
+				<tr>
+					<td><strong>←</strong></td>
+					<td>Seek backward 5s</td>
+				</tr>
+				<tr>
+					<td><strong>f</strong></td>
+					<td>Toggle fullscreen</td>
+				</tr>
+				<tr>
+					<td><strong>v</strong></td>
+					<td>Toggle subtitles</td>
+				</tr>
+				<tr>
+					<td><strong>h</strong></td>
+					<td>Show keybinds</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+
+	<script src="client.js"></script>
+</body>
+</html>
