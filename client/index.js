@@ -80,7 +80,7 @@ function loadEpisode(i) {
 	fetch(`/subtitles/${currentBase}`)
 		.then((res) => res.json())
 		.then((data) => {
-			cues = data;
+			cues = data.map((cue) => ({ ...cue, text: cue.text.replace(/\r?\n/g, "\n") }));
 		});
 
 	updateUrl();
@@ -338,9 +338,8 @@ function seekerTimeFormat(seconds) {
 
 function updateUrl() {
 	const url = new URL(window.location);
-	url.searchParams.set("currentBase", currentBase);
-	url.searchParams.set("currentStartTime", currentStartTime);
-	url.searchParams.set("currentEndTime", currentEndTime);
+	url.searchParams.set("base", currentBase);
+	url.searchParams.set("time", video.currentTime * 1000 + offset);
 	history.pushState(null, "", url.toString());
 }
 
@@ -349,38 +348,26 @@ function updateTitle() {
 }
 
 function updateSubtitles() {
-	let t = video.currentTime * 1000 + offset;
-	let cue = cues.find((c) => t >= c.start && t <= c.end);
-	let newSubtitle = cue ? cue.text.replace(/\r?\n/g, "\n") : "";
+	const time = video.currentTime * 1000 + offset;
+	const newSubtitle = cues.find((c) => time >= c.start && time <= c.end)?.text || "";
 
-	if (newSubtitle !== currentSubtitles) {
-		subDiv.innerText = newSubtitle;
-		currentSubtitles = newSubtitle;
+	if (newSubtitle === currentSubtitles) return;
 
-		if (currentSubtitles.length === 0) {
-			subDiv.style.display = "none";
-			video.classList.add("hide-cursor");
-		} else {
-			if (subtitlesActive) {
-				subDiv.style.display = "block";
-			}
-			resetCursorTimer(false);
+	currentSubtitles = newSubtitle;
+
+	if (currentSubtitles.length === 0) {
+		subDiv.style.display = "none";
+		video.classList.add("hide-cursor");
+	} else {
+		if (subtitlesActive) {
+			subDiv.style.display = "block";
 		}
 
-		if (cue) {
-			const currentCueIndex = cues.indexOf(cue);
-			const previousCue = cues[currentCueIndex - 1];
-			const nextCue = cues[currentCueIndex + 1];
-
-			currentStartTime = Math.max(cue.start - 2500, previousCue ? previousCue.start : cue.start);
-			currentEndTime = Math.min(cue.end + 2500, nextCue ? nextCue.end : cue.end);
-		} else {
-			currentStartTime = 0;
-			currentEndTime = 0;
-		}
-
-		updateUrl();
+		resetCursorTimer(false);
 	}
+	subDiv.innerText = currentSubtitles;
+
+	updateUrl();
 }
 
 // -----------------------------------------------------

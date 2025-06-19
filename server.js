@@ -34,7 +34,7 @@ const { exec } = require("child_process");
 	const app = express();
 	const port = process.env.SERVER_PORT;
 
-	app.use(express.static(path.join(__dirname, "public")));
+	app.use(express.static(__dirname));
 	app.use(express.json());
 
 	/* endpoints */
@@ -66,59 +66,41 @@ const { exec } = require("child_process");
 		res.json(episodes);
 	});
 
+	const ffmpegOptions = {
+		webm: `-vf "scale=1280:-2" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 96k -movflags +faststart`,
+		mp4: `-vf "scale=1280:-2" -c:v h263 -c:a aac -b:a 192k -movflags +faststart`,
+		"3gp": `-c:v mpeg4 -b:v 500k -q:v 5 -c:a aac -b:a 64k -vf "scale=1280:-2"`,
+	};
+
 	app.post("/clip", (req, res) => {
 		console.log(`\nServer: /clip`, req.body);
-		const { base, startTime, endTime } = req.body;
-		if (!base || !startTime || !endTime) {
-			return res.status(400).json({ error: "base, startTime and endTime are required" });
+		const { base, startTime, endTime, ext } = req.body;
+
+		if (!base || !startTime || !endTime || !ext) {
+			return res.status(400).json({ error: "base, startTime, endTime and ext are required" });
+		}
+
+		const options = ffmpegOptions[ext];
+		if (!options) {
+			return res.status(400).json({ error: `Unsupported extension: ${ext}` });
 		}
 
 		const videoFile = path.join(mediaDir, `${base}.mkv`);
-
 		if (!fs.existsSync(videoFile)) {
 			return res.status(404).json({ error: `${videoFile} not found` });
 		}
 
-		Promise.all([
-			new Promise((resolve, reject) => {
-				exec(
-					buildFFmpegCommand(
-						videoFile,
-						path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.webm`),
-						startTime,
-						endTime,
-						`-vf "scale=-2:720" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 96k -movflags +faststart -y`
-					),
-					(error, stdout, stderr) => {
-						if (error) reject(`FFmpeg error: ${stderr}`);
-						else resolve();
-					}
-				);
-			}),
-			new Promise((resolve, reject) => {
-				exec(
-					buildFFmpegCommand(
-						videoFile,
-						path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.mp4`),
-						startTime,
-						endTime,
-						`-vf "scale=-2:720" -c:v libx264 -crf 30 -preset fast -c:a aac -b:a 192k -movflags +faststart -y`
-					),
-					(error, stdout, stderr) => {
-						if (error) reject(`FFmpeg error: ${stderr}`);
-						else resolve();
-					}
-				);
-			}),
-		])
-			.then(() => {
-				console.log(`\nServer: Clipped video for ${base} from ${startTime} to ${endTime}`);
-				res.json({ message: "Video clipped successfully" });
-			})
-			.catch((error) => {
-				console.error(`\nServer: Error clipping video for ${base}:`, error);
-				res.status(500).json({ error: "Error clipping video" });
-			});
+		const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.${ext}`);
+
+		const cmd = buildFFmpegCommand(videoFile, outputFile, startTime, endTime, options);
+		exec(cmd, (error, stdout, stderr) => {
+			if (error) {
+				console.error(`\nServer: Error clipping video for ${base} (${cmd}):`, stderr);
+				return res.status(500).json({ error: "Error clipping video" });
+			}
+			console.log(`\nServer: Clipped video for ${base} from ${startTime} to ${endTime}`);
+			res.json({ message: "Video clipped successfully" });
+		});
 	});
 
 	/* main */
@@ -149,6 +131,6 @@ const { exec } = require("child_process");
 	function buildFFmpegCommand(inputFile, outputFile, startTime, endTime, options) {
 		return `ffmpeg -i "${inputFile}" -ss ${msToTime(startTime)} -t ${msToTime(
 			endTime - startTime
-		)} ${options} "${outputFile}"`;
+		)} ${options} -y "${outputFile}"`;
 	}
 })();

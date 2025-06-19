@@ -8,13 +8,15 @@ const he = require("he");
 const fs = require("fs");
 const path = require("path");
 
-/* args */
+// -----------------------------------------------------
+//#region globals
 
 const serverPort = process.env.SERVER_PORT;
 const ankiPort = process.env.ANKI_PORT;
 const proxyPort = process.env.PROXY_PORT;
 
-/* proxy */
+// -----------------------------------------------------
+//#region proxy
 
 const server = http.createServer((req, res) => {
 	let body = "";
@@ -23,58 +25,15 @@ const server = http.createServer((req, res) => {
 	});
 
 	req.on("end", async () => {
-		try {
-			const headers = { ...req.headers };
+		const headers = { ...req.headers };
 
-			const data = body ? JSON.parse(body) : undefined;
+		const data = body ? JSON.parse(body) : undefined;
 
-			const urlHtml = data?.params?.note?.fields?.Url;
-			const { base, startTime, endTime } = parseUrl(urlHtml);
-
-			// console.log(
-			// 	// `Proxy: received ${JSON.stringify(data?.action === "multi" ? data?.params?.actions : data?.action)}`,
-			// 	data,
-			// 	urlHtml
-			// );
-
-			if (
-				req.method === "POST" &&
-				req.url === "/" &&
-				(data?.action === "addNote" || data?.action === "updateNoteFields") &&
-				base
-			) {
-				console.log("\nProxy: Request from video-player client:", body);
-
-				data.params.note.fields.Url = `${base}-${startTime}-${endTime}`;
-				headers["content-length"] = Buffer.byteLength(JSON.stringify(data)).toString();
-
-				// console.log("----------------------------------");
-				// console.log(path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url));
-				// console.log("----------------------------------");
-
-				const clipPath = path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url);
-				if (fs.existsSync(clipPath + ".mp4") || fs.existsSync(clipPath + ".webm")) {
-					console.log(`\nProxy: Clip ${clipPath} already exists.`);
-				} else {
-					axios
-						.post(`http://127.0.0.1:${serverPort}/clip`, {
-							base,
-							startTime,
-							endTime,
-						})
-						.then((clipResponse) => {
-							console.log("\nProxy: Clip request successful:", clipResponse.data);
-						})
-						.catch((clipError) => {
-							console.error("\nProxy: Error during clip request:", clipError);
-						});
-				}
-			}
-
+		async function followUp() {
 			const axiosConfig = {
 				method: req.method,
-				url: `http://127.0.0.1:${ankiPort}${req.url}`,
-				headers: headers,
+				url: `http://localhost:${ankiPort}${req.url}`,
+				headers,
 				data,
 				responseType: "stream",
 			};
@@ -94,6 +53,81 @@ const server = http.createServer((req, res) => {
 			res.on("error", (err) => {
 				console.error("\nProxy: Error during response to client:", err);
 			});
+		}
+
+		try {
+			if (
+				req.method !== "POST" ||
+				req.url !== "/" ||
+				(data?.action !== "addNote" && data?.action !== "updateNoteFields")
+			) {
+				followUp();
+				return;
+			}
+
+			const urlHtml = data?.params?.note?.fields?.Url;
+			const { base, time } = parseUrl(urlHtml);
+
+			if (!base) {
+				followUp();
+				return;
+			}
+
+			const cues = (await (await fetch(`http://localhost:${serverPort}/subtitles/${base}`)).json()).map(
+				(cue) => ({
+					...cue,
+					text: cue.text.replace(/\r?\n/g, "\n"),
+				})
+			);
+
+			const cueIndex = cues.findIndex((c) => time >= c.start && time <= c.end);
+
+			if (cueIndex === -1) {
+				followUp();
+				return;
+			}
+
+			const cue = cues[cueIndex];
+			console.log("\nProxy: Request from video-player client:", body);
+
+			const prevCue = cues[cueIndex - 1];
+			const nextCue = cues[cueIndex + 1];
+
+			const startTime = Math.max(cue.start - 2500, prevCue ? prevCue.start : cue.start);
+			const endTime = Math.min(cue.end + 2500, nextCue ? nextCue.end : cue.end);
+
+			data.params.note.fields.Url = `${base}-${startTime}-${endTime}`;
+			data.params.note.fields.Subtitles = JSON.stringify({
+				prev: prevCue?.text || "",
+				cur: cue?.text || "",
+				next: nextCue?.text || "",
+			});
+
+			headers["content-length"] = Buffer.byteLength(JSON.stringify(data)).toString();
+
+			const baseClipPath = path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url);
+
+			for (const ext of ["webm", "3gp"]) {
+				if (!fs.existsSync(`${baseClipPath}.${ext}`)) {
+					axios
+						.post(`http://localhost:${serverPort}/clip`, {
+							base,
+							startTime,
+							endTime,
+							ext,
+						})
+						.then((res) => {
+							console.log(`\nProxy: ${ext} clip request successful:`, res.data);
+						})
+						.catch((err) => {
+							console.error(`\nProxy: ${ext} clip request failed`, err);
+						});
+				} else {
+					console.log(`\nProxy: Clip ${baseClipPath}.${ext} already exists.`);
+				}
+			}
+
+			followUp();
 		} catch (error) {
 			console.error("\nProxy: Error forwarding request:", error);
 			if (!res.headersSent) {
@@ -108,16 +142,18 @@ const server = http.createServer((req, res) => {
 	});
 });
 
-/* main */
+// -----------------------------------------------------
+//#region main
 
-server.listen(proxyPort, "127.0.0.1", () => {
-	console.log(`Proxy: running at http://127.0.0.1:${proxyPort}`);
+server.listen(proxyPort, "localhost", () => {
+	console.log(`Proxy: running at http://localhost:${proxyPort}`);
 });
 
-/* utils */
+// -----------------------------------------------------
+//#region utils
 
 function parseUrl(url) {
-	const err = { base: undefined, startTime: 0, endTime: 0 };
+	const err = { base: undefined, time: 0 };
 	if (!url) return err;
 	const hrefMatch = url.match(/href="([^"]+)"/);
 	if (!hrefMatch) return err;
@@ -126,8 +162,7 @@ function parseUrl(url) {
 	const params = new URLSearchParams(actualUrl.split("?")[1]);
 	if (!params) return err;
 	return {
-		base: params.get("currentBase"),
-		startTime: Number(params.get("currentStartTime")),
-		endTime: Number(params.get("currentEndTime")),
+		base: params.get("base"),
+		time: Number(params.get("time")),
 	};
 }
