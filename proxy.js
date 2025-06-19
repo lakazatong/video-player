@@ -22,22 +22,6 @@ const server = http.createServer((req, res) => {
 		body += chunk;
 	});
 
-	function parseUrl(url) {
-		const err = { base: undefined, startTime: 0, endTime: 0 };
-		if (!url) return err;
-		const hrefMatch = url.match(/href="([^"]+)"/);
-		if (!hrefMatch) return err;
-		const actualUrl = he.decode(hrefMatch[1]);
-		if (!actualUrl) return err;
-		const params = new URLSearchParams(actualUrl.split("?")[1]);
-		if (!params) return err;
-		return {
-			base: params.get("currentBase"),
-			startTime: Number(params.get("currentStartTime")),
-			endTime: Number(params.get("currentEndTime")),
-		};
-	}
-
 	req.on("end", async () => {
 		try {
 			const headers = { ...req.headers };
@@ -47,11 +31,11 @@ const server = http.createServer((req, res) => {
 			const urlHtml = data?.params?.note?.fields?.Url;
 			const { base, startTime, endTime } = parseUrl(urlHtml);
 
-			console.log(
-				`Proxy: received ${JSON.stringify(data?.action === "multi" ? data?.params?.actions : data?.action)}`,
-				data,
-				urlHtml
-			);
+			// console.log(
+			// 	// `Proxy: received ${JSON.stringify(data?.action === "multi" ? data?.params?.actions : data?.action)}`,
+			// 	data,
+			// 	urlHtml
+			// );
 
 			if (
 				req.method === "POST" &&
@@ -59,16 +43,19 @@ const server = http.createServer((req, res) => {
 				(data?.action === "addNote" || data?.action === "updateNoteFields") &&
 				base
 			) {
-				console.log("Proxy: Request from video-player client:", body);
+				console.log("\nProxy: Request from video-player client:", body);
 
-				data.params.note.fields.Url = `${base}-${startTime}-${endTime}.webm`;
+				data.params.note.fields.Url = `${base}-${startTime}-${endTime}`;
 				headers["content-length"] = Buffer.byteLength(JSON.stringify(data)).toString();
 
 				// console.log("----------------------------------");
 				// console.log(path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url));
 				// console.log("----------------------------------");
 
-				if (!fs.existsSync(path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url))) {
+				const clipPath = path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url);
+				if (fs.existsSync(clipPath)) {
+					console.log(`\nProxy: Clip ${clipPath} already exists.`);
+				} else {
 					axios
 						.post(`http://127.0.0.1:${serverPort}/clip`, {
 							base,
@@ -76,10 +63,10 @@ const server = http.createServer((req, res) => {
 							endTime,
 						})
 						.then((clipResponse) => {
-							console.log("Proxy: Clip request successful:", clipResponse.data);
+							console.log("\nProxy: Clip request successful:", clipResponse.data);
 						})
 						.catch((clipError) => {
-							console.error("Proxy: Error during clip request:", clipError);
+							console.error("\nProxy: Error during clip request:", clipError);
 						});
 				}
 			}
@@ -99,16 +86,16 @@ const server = http.createServer((req, res) => {
 			response.data.pipe(res);
 
 			response.data.on("error", (err) => {
-				console.error("Proxy: Error while streaming response:", err);
+				console.error("\nProxy: Error while streaming response:", err);
 				res.statusCode = 500;
 				res.end("Internal Server Error");
 			});
 
 			res.on("error", (err) => {
-				console.error("Proxy: Error during response to client:", err);
+				console.error("\nProxy: Error during response to client:", err);
 			});
 		} catch (error) {
-			console.error("Proxy: Error forwarding request:", error);
+			console.error("\nProxy: Error forwarding request:", error);
 			if (!res.headersSent) {
 				res.statusCode = 500;
 				res.end("Internal Server Error");
@@ -126,3 +113,21 @@ const server = http.createServer((req, res) => {
 server.listen(proxyPort, "127.0.0.1", () => {
 	console.log(`Proxy: running at http://127.0.0.1:${proxyPort}`);
 });
+
+/* utils */
+
+function parseUrl(url) {
+	const err = { base: undefined, startTime: 0, endTime: 0 };
+	if (!url) return err;
+	const hrefMatch = url.match(/href="([^"]+)"/);
+	if (!hrefMatch) return err;
+	const actualUrl = he.decode(hrefMatch[1]);
+	if (!actualUrl) return err;
+	const params = new URLSearchParams(actualUrl.split("?")[1]);
+	if (!params) return err;
+	return {
+		base: params.get("currentBase"),
+		startTime: Number(params.get("currentStartTime")),
+		endTime: Number(params.get("currentEndTime")),
+	};
+}
