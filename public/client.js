@@ -10,7 +10,7 @@ let episodes = [];
 let index = 0;
 let cues = [];
 
-let paused = true;
+let userPause = true;
 
 let currentBase = "";
 let currentStartTime = 0;
@@ -66,7 +66,7 @@ function resetCursorTimer(force = true) {
 		clearTimeout(cursorTimeout);
 		cursorTimeout = null;
 		cursorTimeout = setTimeout(() => {
-			if (!subDiv.matches(":hover") && !paused) {
+			if (!subDiv.matches(":hover") && !video.paused) {
 				video.classList.add("hide-cursor");
 			}
 		}, 1500);
@@ -85,7 +85,7 @@ document.addEventListener("mousemove", () => {
 // is there when subtitles are off
 // when subtitles are on, they trigger events themselves by showing/hiding the subtitle div
 setInterval(() => {
-	if (!paused) {
+	if (!video.paused) {
 		dummyBool = !dummyBool;
 		dummyDiv.style.display = dummyBool ? "block" : "none";
 	}
@@ -120,8 +120,8 @@ video.ontimeupdate = () => {
 			const previousCue = cues[currentCueIndex - 1];
 			const nextCue = cues[currentCueIndex + 1];
 
-			currentStartTime = previousCue ? previousCue.start : cue.start;
-			currentEndTime = nextCue ? nextCue.end : cue.end;
+			currentStartTime = Math.max(cue.start - 2500, previousCue ? previousCue.start : cue.start);
+			currentEndTime = Math.min(cue.end + 2500, nextCue ? nextCue.end : cue.end);
 		} else {
 			currentStartTime = 0;
 			currentEndTime = 0;
@@ -137,11 +137,11 @@ function togglePlay(e) {
 	e.preventDefault();
 	if (video.paused) {
 		video.play();
-		paused = false;
+		userPause = false;
 		resetCursorTimer(false);
 	} else {
 		video.pause();
-		paused = true;
+		userPause = true;
 	}
 }
 
@@ -213,16 +213,6 @@ document.addEventListener("keydown", (e) => {
 	}
 });
 
-/* pause when tabbed out */
-
-document.addEventListener("visibilitychange", () => {
-	if (document.hidden && !paused) {
-		video.pause();
-	} else if (!paused) {
-		video.play();
-	}
-});
-
 /* show burger message */
 
 burgerMessage.style.display = "block";
@@ -242,29 +232,38 @@ function getSelect() {
 }
 
 subDiv.addEventListener("mouseenter", () => {
-	if (!paused) {
-		video.pause();
-		paused = true;
-	}
+	video.pause();
 	onSubs = true;
 });
 
 subDiv.addEventListener("mouseleave", () => {
-	if (paused && getSelect().length === 0) {
-		video.play();
-		paused = false;
-	}
+	if (!userPause && getSelect().length === 0) video.play();
 	onSubs = false;
 });
 
 document.addEventListener("selectionchange", () => {
 	if (getSelect()) {
-		if (!paused) {
-			video.pause();
-			paused = true;
-		}
-	} else if (paused && !onSubs) {
+		video.pause();
+	} else if (!userPause) {
 		video.play();
-		paused = false;
 	}
+});
+
+/* pause when tabbed out */
+
+document.addEventListener("visibilitychange", () => {
+	if (userPause) return;
+	if (document.hidden) {
+		video.pause();
+	} else if (!onSubs && getSelect().length === 0) {
+		video.play();
+	}
+});
+
+window.addEventListener("blur", () => {
+	video.pause();
+});
+
+window.addEventListener("focus", () => {
+	if (!userPause && !onSubs && getSelect().length === 0) video.play();
 });

@@ -5,6 +5,8 @@ require("dotenv").config();
 const http = require("http");
 const axios = require("axios");
 const he = require("he");
+const fs = require("fs");
+const path = require("path");
 
 /* args */
 
@@ -20,6 +22,22 @@ const server = http.createServer((req, res) => {
 		body += chunk;
 	});
 
+	function parseUrl(url) {
+		const err = { base: undefined, startTime: 0, endTime: 0 };
+		if (!url) return err;
+		const hrefMatch = url.match(/href="([^"]+)"/);
+		if (!hrefMatch) return err;
+		const actualUrl = he.decode(hrefMatch[1]);
+		if (!actualUrl) return err;
+		const params = new URLSearchParams(actualUrl.split("?")[1]);
+		if (!params) return err;
+		return {
+			base: params.get("currentBase"),
+			startTime: Number(params.get("currentStartTime")),
+			endTime: Number(params.get("currentEndTime")),
+		};
+	}
+
 	req.on("end", async () => {
 		try {
 			const headers = { ...req.headers };
@@ -27,38 +45,42 @@ const server = http.createServer((req, res) => {
 			const data = body ? JSON.parse(body) : undefined;
 
 			const urlHtml = data?.params?.note?.fields?.Url;
-			const hrefMatch = urlHtml?.match(/href="([^"]+)"/);
-			const actualUrl = hrefMatch ? he.decode(hrefMatch[1]) : undefined;
+			const { base, startTime, endTime } = parseUrl(urlHtml);
 
 			console.log(
 				`Proxy: received ${JSON.stringify(data?.action === "multi" ? data?.params?.actions : data?.action)}`,
 				data,
-				urlHtml,
-				actualUrl
+				urlHtml
 			);
 
 			if (
 				req.method === "POST" &&
 				req.url === "/" &&
 				(data?.action === "addNote" || data?.action === "updateNoteFields") &&
-				actualUrl
+				base
 			) {
-				console.log("\n-----------------------");
 				console.log("Proxy: Request from video-player client:", body);
-				try {
-					const params = new URLSearchParams(actualUrl.split("?")[1]);
-					console.log(actualUrl);
-					console.log(params);
-					console.log("-----------------------\n");
-					const clipResponse = await axios.post(`http://127.0.0.1:${serverPort}/clip`, {
-						base: params.get("currentBase"),
-						startTime: Number(params.get("currentStartTime")),
-						endTime: Number(params.get("currentEndTime")),
-					});
 
-					console.log("Proxy: Clip request successful:", clipResponse.data);
-				} catch (clipError) {
-					console.error("Proxy: Error during clip request:", clipError);
+				data.params.note.fields.Url = `${base}-${startTime}-${endTime}.webm`;
+				headers["content-length"] = Buffer.byteLength(JSON.stringify(data)).toString();
+
+				// console.log("----------------------------------");
+				// console.log(path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url));
+				// console.log("----------------------------------");
+
+				if (!fs.existsSync(path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url))) {
+					axios
+						.post(`http://127.0.0.1:${serverPort}/clip`, {
+							base,
+							startTime,
+							endTime,
+						})
+						.then((clipResponse) => {
+							console.log("Proxy: Clip request successful:", clipResponse.data);
+						})
+						.catch((clipError) => {
+							console.error("Proxy: Error during clip request:", clipError);
+						});
 				}
 			}
 

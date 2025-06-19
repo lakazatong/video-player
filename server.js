@@ -6,39 +6,26 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const subtitle = require("subtitle");
-const { exec, spawn } = require("child_process");
+const { exec } = require("child_process");
 
 (async () => {
 	/* args */
 
 	let mediaDir = process.argv[2];
-	// Linux
-	let ankiMediaDir =
-		process.env.ANKI_MEDIA_FOLDER || `${process.env.HOME || "~"}/.local/share/Anki2/User 1/collection.media`;
-	if (!fs.existsSync(ankiMediaDir)) {
-		// WSL
-		ankiMediaDir = path.join(
-			process.env.APPDATA || (await getWindowsAppDataPath()),
-			"Anki2/User 1/collection.media"
-		);
-	}
+	let ankiMediaDir = process.env.ANKI_MEDIA_FOLDER;
 
 	if (!mediaDir) {
 		console.error("Please provide full path of the videos/subtitles folder as an argument.");
 		process.exit(1);
 	}
 
-	/* unix-ify paths */
-
-	mediaDir = normalizePath(mediaDir);
 	if (!fs.existsSync(mediaDir) || !fs.lstatSync(mediaDir).isDirectory()) {
-		console.error(`Server: Invalid folder: ${mediaDir}`);
+		console.error(`Invalid folder: ${mediaDir}`);
 		process.exit(1);
 	}
 
-	ankiMediaDir = normalizePath(ankiMediaDir);
 	if (!fs.existsSync(ankiMediaDir) || !fs.lstatSync(ankiMediaDir).isDirectory()) {
-		console.error(`Server: Invalid folder: ${ankiMediaDir}`);
+		console.error(`Invalid folder: ${ankiMediaDir}`);
 		process.exit(1);
 	}
 
@@ -92,7 +79,8 @@ const { exec, spawn } = require("child_process");
 			return res.status(404).json({ error: `${videoFile} not found` });
 		}
 
-		const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.mp4`);
+		// const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.mp4`);
+		const outputFile = path.join(ankiMediaDir, `${base}-${startTime}-${endTime}.webm`);
 
 		const ffmpegCommand = buildFFmpegCommand(videoFile, outputFile, startTime, endTime);
 		console.log(ffmpegCommand);
@@ -132,70 +120,10 @@ const { exec, spawn } = require("child_process");
 	}
 
 	function buildFFmpegCommand(inputFile, outputFile, startTime, endTime) {
-		return `ffmpeg -ss ${msToTime(startTime)} -to ${msToTime(
-			endTime
-		)} -i "${inputFile}" -vf "scale=-2:720" -c:v libx264 -crf 18 -preset veryslow -c:a copy "${outputFile}"`;
-	}
-
-	function normalizePath(raw) {
-		let input = raw.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "").replace(/\\/g, "/");
-
-		if (/^[A-Za-z]:\//.test(input)) {
-			input = input.replace(/^[A-Za-z]:/, `/mnt/${input[0].toLowerCase()}`);
-		}
-
-		return input;
-	}
-
-	function getWindowsAppDataPath() {
-		return new Promise((resolve, reject) => {
-			const echo = spawn("cmd.exe", ["/c", "echo", "%APPDATA%"], {
-				shell: true,
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-
-			let stdout = "";
-			let stderr = "";
-
-			echo.stdout.on("data", (data) => {
-				stdout += data.toString();
-			});
-
-			echo.stderr.on("data", (data) => {
-				stderr += data.toString();
-			});
-
-			echo.on("close", (code) => {
-				if (code !== 0 || stderr.trim()) {
-					reject(new Error(`Failed to get APPDATA: ${stderr}`));
-					return;
-				}
-
-				const winPath = stdout.trim().replace(/\r/g, "");
-
-				const wslpath = spawn("wslpath", ["-a", winPath], {
-					stdio: ["ignore", "pipe", "pipe"],
-				});
-
-				let wslOut = "";
-				let wslErr = "";
-
-				wslpath.stdout.on("data", (data) => {
-					wslOut += data.toString();
-				});
-
-				wslpath.stderr.on("data", (data) => {
-					wslErr += data.toString();
-				});
-
-				wslpath.on("close", (code) => {
-					if (code !== 0 || wslErr.trim()) {
-						reject(new Error(`Failed to convert path: ${wslErr}`));
-					} else {
-						resolve(wslOut.trim());
-					}
-				});
-			});
-		});
+		// const MP4Options = `-vf "scale=-2:720" -c:v libx264 -crf 18 -preset veryslow -c:a copy -movflags +faststart -y`;
+		const WEBMOptions = `-vf "scale=-2:720" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 96k -movflags +faststart -y`;
+		return `ffmpeg -i "${inputFile}" -ss ${msToTime(startTime)} -t ${msToTime(
+			endTime - startTime
+		)} ${WEBMOptions} "${outputFile}"`;
 	}
 })();
