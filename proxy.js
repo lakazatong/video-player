@@ -53,7 +53,7 @@ const server = http.createServer((req, res) => {
 				// console.log("----------------------------------");
 
 				const clipPath = path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url);
-				if (fs.existsSync(clipPath)) {
+				if (fs.existsSync(clipPath + ".mp4") || fs.existsSync(clipPath + ".webm")) {
 					console.log(`\nProxy: Clip ${clipPath} already exists.`);
 				} else {
 					axios
