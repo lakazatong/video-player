@@ -5,14 +5,18 @@
 		<link rel="stylesheet" href="style.css" />
 	</head>
 	<body>
-		<video id="video"></video>
-		<div id="subtitles"></div>
 		<div id="dummy"></div>
 
-		<!-- Burger message -->
-		<div id="burger-message" class="burger-message">Press H to show keybinds</div>
+		<video id="video"></video>
 
-		<!-- Help content -->
+		<div id="subtitles"></div>
+
+		<div id="custom-controls">
+			<span id="current-time">00:00</span>
+			<input type="range" id="seeker" min="0" value="0" step="0.1" tabindex="-1" />
+			<span id="duration">00:00</span>
+		</div>
+
 		<div id="help" class="help-container">
 			<div class="help-content">
 				<p>This player is button-free, everything is handled with the following keybinds:</p>
@@ -20,22 +24,6 @@
 					<tr>
 						<td><strong>Space</strong></td>
 						<td>Play / Pause</td>
-					</tr>
-					<tr>
-						<td><strong>n</strong></td>
-						<td>Next episode</td>
-					</tr>
-					<tr>
-						<td><strong>p</strong></td>
-						<td>Previous episode</td>
-					</tr>
-					<tr>
-						<td><strong>→</strong></td>
-						<td>Seek forward 5s</td>
-					</tr>
-					<tr>
-						<td><strong>←</strong></td>
-						<td>Seek backward 5s</td>
 					</tr>
 					<tr>
 						<td><strong>f</strong></td>
@@ -46,12 +34,42 @@
 						<td>Toggle subtitles</td>
 					</tr>
 					<tr>
+						<td><strong>s</strong></td>
+						<td>Toggle seeker</td>
+					</tr>
+					<tr>
+						<td><strong>p</strong></td>
+						<td>Previous episode</td>
+					</tr>
+					<tr>
+						<td><strong>n</strong></td>
+						<td>Next episode</td>
+					</tr>
+					<tr>
+						<td><strong>←</strong></td>
+						<td>Seek backward 5s</td>
+					</tr>
+					<tr>
+						<td><strong>→</strong></td>
+						<td>Seek forward 5s</td>
+					</tr>
+					<tr>
+						<td><strong>shift + ←</strong></td>
+						<td>Subtitles offset -1ms</td>
+					</tr>
+					<tr>
+						<td><strong>shift + →</strong></td>
+						<td>Subtitles offset +1ms</td>
+					</tr>
+					<tr>
 						<td><strong>h</strong></td>
 						<td>Toggle keybinds</td>
 					</tr>
 				</table>
 			</div>
 		</div>
+
+		<div id="burger-message" class="burger-message">Press H to show keybinds</div>
 
 		<script src="client.js"></script>
 	</body>

@@ -5,12 +5,22 @@ let subDiv = document.getElementById("subtitles");
 let helpDiv = document.getElementById("help");
 let burgerMessage = document.getElementById("burger-message");
 let dummyDiv = document.getElementById("dummy");
+let customControls = document.getElementById("custom-controls");
+let seeker = document.getElementById("seeker");
+let currentTimeDisplay = document.getElementById("current-time");
+let durationDisplay = document.getElementById("duration");
 
 let episodes = [];
 let index = 0;
+
 let cues = [];
+let offset = 0;
+
+let volume = 1;
+video.volume = volume;
 
 let userPause = true;
+let muted = false;
 
 let currentBase = "";
 let currentStartTime = 0;
@@ -46,20 +56,9 @@ function loadEpisode(i) {
 	updateUrl();
 }
 
-/* update URL with current state */
-
-function updateUrl() {
-	const url = new URL(window.location);
-	url.searchParams.set("currentBase", currentBase);
-	url.searchParams.set("currentStartTime", currentStartTime);
-	url.searchParams.set("currentEndTime", currentEndTime);
-	history.pushState(null, "", url.toString());
-}
-
 /* hide cursor */
 
 let cursorTimeout;
-let dummyBool;
 
 function resetCursorTimer(force = true) {
 	if (force || !cursorTimeout) {
@@ -85,10 +84,7 @@ document.addEventListener("mousemove", () => {
 // is there when subtitles are off
 // when subtitles are on, they trigger events themselves by showing/hiding the subtitle div
 setInterval(() => {
-	if (!video.paused) {
-		dummyBool = !dummyBool;
-		dummyDiv.style.display = dummyBool ? "block" : "none";
-	}
+	if (!video.paused) dummyDiv.style.display = dummyDiv.style.display === "none" ? "block" : "none";
 }, 300);
 
 /* update subtitles */
@@ -97,6 +93,8 @@ let subtitlesActive = true;
 let currentSubtitles = "";
 
 video.ontimeupdate = () => {
+	// subtitles
+
 	let t = video.currentTime * 1000;
 	let cue = cues.find((c) => t >= c.start && t <= c.end);
 	let newSubtitle = cue ? cue.text.replace(/\r?\n/g, "\n") : "";
@@ -129,6 +127,11 @@ video.ontimeupdate = () => {
 
 		updateUrl();
 	}
+
+	// seeker
+
+	seeker.value = video.currentTime;
+	currentTimeDisplay.innerText = seekerTimeFormat(video.currentTime);
 };
 
 /* keybinds */
@@ -170,27 +173,10 @@ function toggleFullscreen() {
 	}
 }
 
-function toggleSubtitles() {
-	subtitlesActive = !subtitlesActive;
-	subDiv.style.display = subtitlesActive && currentSubtitles.length > 0 ? "block" : "none";
-}
-
-function toggleHelp() {
-	helpDiv.style.display = helpDiv.style.display === "flex" ? "none" : "flex";
-}
-
 document.addEventListener("keydown", (e) => {
 	switch (e.key) {
 		case " ":
 			togglePlay(e);
-			break;
-		case "n":
-		case "N":
-			loadEpisode(index + 1);
-			break;
-		case "p":
-		case "P":
-			loadEpisode(index - 1);
 			break;
 		case "f":
 		case "F":
@@ -198,17 +184,59 @@ document.addEventListener("keydown", (e) => {
 			break;
 		case "v":
 		case "V":
-			toggleSubtitles();
+			subtitlesActive = !subtitlesActive;
+			subDiv.style.display = subtitlesActive && currentSubtitles.length > 0 ? "block" : "none";
+			break;
+		case "s":
+		case "S":
+			customControls.style.display = customControls.style.display === "none" ? "flex" : "none";
+			break;
+		case "m":
+		case "M":
+			muted = !muted;
+			video.volume = muted ? 0 : volume;
+			break;
+		case "p":
+		case "P":
+			loadEpisode(index - 1);
+			break;
+		case "n":
+		case "N":
+			loadEpisode(index + 1);
+			break;
+		case "ArrowLeft":
+			if (e.shiftKey) {
+				offset -= 1;
+			} else {
+				video.currentTime -= 5;
+			}
+			break;
+		case "ArrowRight":
+			if (e.shiftKey) {
+				offset += 1;
+			} else {
+				video.currentTime += 5;
+			}
+			break;
+		case "ArrowUp":
+			volume = Math.min(1, volume + 0.05);
+			if (!muted) video.volume = volume;
+			break;
+		case "ArrowDown":
+			volume = Math.max(0, volume - 0.05);
+			if (!muted) video.volume = volume;
 			break;
 		case "h":
 		case "H":
-			toggleHelp();
-			break;
-		case "ArrowRight":
-			video.currentTime += 5;
-			break;
-		case "ArrowLeft":
-			video.currentTime -= 5;
+			if (helpDiv.style.display === "flex") {
+				helpDiv.style.display = "none";
+				if (!userPause) video.play();
+				resetCursorTimer(false);
+			} else {
+				helpDiv.style.display = "flex";
+				video.pause();
+			}
+
 			break;
 	}
 });
@@ -267,3 +295,30 @@ window.addEventListener("blur", () => {
 window.addEventListener("focus", () => {
 	if (!userPause && !onSubs && getSelect().length === 0) video.play();
 });
+
+/* custom controls */
+
+video.addEventListener("loadedmetadata", () => {
+	seeker.max = video.duration;
+	durationDisplay.innerText = seekerTimeFormat(video.duration);
+});
+
+seeker.addEventListener("input", (e) => {
+	video.currentTime = e.target.value;
+});
+
+function seekerTimeFormat(seconds) {
+	let mins = Math.floor(seconds / 60);
+	let secs = Math.floor(seconds % 60);
+	return `${mins < 10 ? "0" + mins : mins}:${secs < 10 ? "0" + secs : secs}`;
+}
+
+/* utils */
+
+function updateUrl() {
+	const url = new URL(window.location);
+	url.searchParams.set("currentBase", currentBase);
+	url.searchParams.set("currentStartTime", currentStartTime);
+	url.searchParams.set("currentEndTime", currentEndTime);
+	history.pushState(null, "", url.toString());
+}
