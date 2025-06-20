@@ -61,6 +61,8 @@ const server = http.createServer((req, res) => {
 				req.url !== "/" ||
 				(data?.action !== "addNote" && data?.action !== "updateNoteFields")
 			) {
+				// console.log("\nProxy: Non-relevant request, forwarding directly to Anki.");
+				// console.log("Proxy: Request body:", body);
 				followUp();
 				return;
 			}
@@ -76,7 +78,7 @@ const server = http.createServer((req, res) => {
 			const cues = (await (await fetch(`http://localhost:${serverPort}/subtitles/${base}`)).json()).map(
 				(cue) => ({
 					...cue,
-					text: cue.text.replace(/\r?\n/g, "\n"),
+					text: cue.text.replace(/\r?\n/g, ""),
 				})
 			);
 
@@ -96,18 +98,14 @@ const server = http.createServer((req, res) => {
 			const startTime = Math.max(cue.start - 2500, prevCue ? prevCue.start : cue.start);
 			const endTime = Math.min(cue.end + 2500, nextCue ? nextCue.end : cue.end);
 
-			data.params.note.fields.Url = `${base}-${startTime}-${endTime}`;
-			data.params.note.fields.Subtitles = JSON.stringify({
-				prev: prevCue?.text || "",
-				cur: cue?.text || "",
-				next: nextCue?.text || "",
-			});
+			data.params.note.fields.Url = `${cleanPath(base)}-${startTime}-${endTime}`;
+			data.params.note.fields.Subtitles = [prevCue?.text || "", cue?.text || "", nextCue?.text || ""].join("\n");
 
 			headers["content-length"] = Buffer.byteLength(JSON.stringify(data)).toString();
 
 			const baseClipPath = path.join(process.env.ANKI_MEDIA_FOLDER, data.params.note.fields.Url);
 
-			for (const ext of ["webm", "3gp"]) {
+			for (const ext of ["webm", "mp4", "3gp", "mkv"]) {
 				if (!fs.existsSync(`${baseClipPath}.${ext}`)) {
 					axios
 						.post(`http://localhost:${serverPort}/clip`, {
@@ -120,7 +118,7 @@ const server = http.createServer((req, res) => {
 							console.log(`\nProxy: ${ext} clip request successful:`, res.data);
 						})
 						.catch((err) => {
-							console.error(`\nProxy: ${ext} clip request failed`, err);
+							console.error(`\nProxy: ${ext} clip request failed`, err.response.data);
 						});
 				} else {
 					console.log(`\nProxy: Clip ${baseClipPath}.${ext} already exists.`);
@@ -165,4 +163,12 @@ function parseUrl(url) {
 		base: params.get("base"),
 		time: Number(params.get("time")),
 	};
+}
+
+function cleanPath(path) {
+	return path
+		.trim()
+		.replace(/ /g, "_")
+		.replace(/[^a-zA-Z0-9_-]/g, "")
+		.replace(/__+/g, "_");
 }
