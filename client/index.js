@@ -4,6 +4,7 @@
 //#region elements
 
 let video = document.getElementById("video");
+let source = video.querySelector("source");
 let subDiv = document.getElementById("subtitles");
 let helpDiv = document.getElementById("help");
 let dummyDiv = document.getElementById("dummy");
@@ -44,6 +45,8 @@ video.volume = volume;
 
 let userPause = true;
 let muted = false;
+let seekerLeft;
+let seekerRight;
 
 // timeouts
 
@@ -76,7 +79,13 @@ function loadEpisode(i) {
 
 	currentBase = episodes[index];
 	if (!currentBase) return;
-	video.src = `/video/${currentBase}`;
+
+	fetch(`/video/${currentBase}`)
+		.then((res) => res.blob())
+		.then((blob) => {
+			source.src = URL.createObjectURL(blob);
+		});
+
 	fetch(`/subtitles/${currentBase}`)
 		.then((res) => res.json())
 		.then((data) => {
@@ -114,20 +123,6 @@ document.addEventListener("mousemove", () => {
 setInterval(() => {
 	if (!video.paused) dummyDiv.style.display = dummyDiv.style.display === "none" ? "block" : "none";
 }, 300);
-
-// -----------------------------------------------------
-//#region video playing
-
-video.ontimeupdate = () => {
-	// subtitles
-
-	updateSubtitles();
-
-	// seeker
-
-	seeker.value = video.currentTime;
-	currentTimeDisplay.innerText = seekerTimeFormat(video.currentTime);
-};
 
 // -----------------------------------------------------
 //#region toggles
@@ -233,7 +228,8 @@ document.addEventListener("keydown", (e) => {
 				offset -= 1;
 				updateSubtitles();
 			} else {
-				video.currentTime -= 5;
+				seeker.value = Math.max(0, parseInt(seeker.value) - 5).toString();
+				seekerUpdated();
 			}
 			break;
 		case "ArrowRight":
@@ -241,7 +237,8 @@ document.addEventListener("keydown", (e) => {
 				offset += 1;
 				updateSubtitles();
 			} else {
-				video.currentTime += 5;
+				seeker.value = Math.min(parseInt(seeker.max), parseInt(seeker.value) + 5).toString();
+				seekerUpdated();
 			}
 			break;
 		case "ArrowUp":
@@ -319,15 +316,18 @@ window.addEventListener("focus", () => {
 //#region controls
 
 video.addEventListener("loadedmetadata", () => {
-	seeker.max = video.duration;
-	durationDisplay.innerText = seekerTimeFormat(video.duration);
+	seeker.value = "0";
+	seeker.max = video.duration.toString();
+	// seekerLeft = 5 / seeker.max;
+	// seekerRight = seekerLeft;
+	// console.log(seekerLeft, seeker.max);
+	durationDisplay.innerText = seekerTimeFormat(seeker.max);
 });
 
-seeker.addEventListener("input", (e) => {
-	video.currentTime = e.target.value;
-});
+seeker.addEventListener("input", seekerUpdated);
 
 function seekerTimeFormat(seconds) {
+	seconds = typeof seconds === "string" ? parseInt(seconds) : seconds;
 	let mins = Math.floor(seconds / 60);
 	let secs = Math.floor(seconds % 60);
 	return `${mins < 10 ? "0" + mins : mins}:${secs < 10 ? "0" + secs : secs}`;
@@ -339,7 +339,7 @@ function seekerTimeFormat(seconds) {
 function updateUrl() {
 	const url = new URL(window.location);
 	url.searchParams.set("base", currentBase);
-	url.searchParams.set("time", video.currentTime * 1000 + offset);
+	url.searchParams.set("time", seeker.value * 1000 + offset);
 	history.pushState(null, "", url.toString());
 }
 
@@ -348,7 +348,7 @@ function updateTitle() {
 }
 
 function updateSubtitles() {
-	const time = video.currentTime * 1000 + offset;
+	const time = seeker.value * 1000 + offset;
 	const newSubtitle = cues.find((c) => time >= c.start && time <= c.end)?.text || "";
 
 	if (newSubtitle === currentSubtitles) return;
@@ -368,6 +368,12 @@ function updateSubtitles() {
 	subDiv.innerText = currentSubtitles;
 
 	updateUrl();
+}
+
+function seekerUpdated() {
+	video.currentTime = seeker.value;
+	currentTimeDisplay.innerText = seekerTimeFormat(seeker.value);
+	updateSubtitles();
 }
 
 // -----------------------------------------------------

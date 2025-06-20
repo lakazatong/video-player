@@ -24,6 +24,10 @@ video {
 	z-index: 2;
 }
 
+/* #player {
+	display: none;
+} */
+
 video.hide-cursor {
 	cursor: none;
 

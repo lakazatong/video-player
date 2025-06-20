@@ -41,11 +41,40 @@ app.use(express.json());
 // -----------------------------------------------------
 //#region endpoints
 
+// app.get("/video/:base", (req, res) => {
+// 	console.log(`\nServer: /video/${req.params.base}`);
+// 	const filePath = path.join(mediaDir, `${req.params.base}.mkv`);
+// 	if (fs.existsSync(filePath)) res.sendFile(filePath);
+// 	else res.status(404).send("Not found");
+// });
+
 app.get("/video/:base", (req, res) => {
 	console.log(`\nServer: /video/${req.params.base}`);
-	const filePath = path.join(mediaDir, `${req.params.base}.mkv`);
-	if (fs.existsSync(filePath)) res.sendFile(filePath);
-	else res.status(404).send("Not found");
+	const filePath = path.join(mediaDir, `${req.params.base}`);
+	if (!fs.existsSync(filePath + ".mkv")) {
+		res.status(404).send("Not found");
+		return;
+	}
+
+	function serve() {
+		res.setHeader("Content-Type", "video/mp4");
+		res.setHeader("Content-Disposition", "inline");
+		fs.createReadStream(filePath + ".mp4").pipe(res);
+	}
+
+	if (fs.existsSync(filePath + ".mp4")) {
+		serve();
+	} else {
+		const cmd = `ffmpeg -i "${filePath}.mkv" -c:v h264 -c:a aac -movflags +faststart -y "${filePath}.mp4"`;
+		exec(cmd, (error, stdout, stderr) => {
+			if (error) {
+				console.error(`\nServer: Error converting video ${filePath} (${cmd}):`, stderr);
+			} else {
+				console.log(`\nServer: Done converting video ${filePath}`);
+				serve();
+			}
+		});
+	}
 });
 
 app.get("/subtitles/:base", (req, res) => {
