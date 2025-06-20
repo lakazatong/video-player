@@ -4,7 +4,6 @@
 //#region elements
 
 let video = document.getElementById("video");
-let source = video.querySelector("source");
 let subDiv = document.getElementById("subtitles");
 let helpDiv = document.getElementById("help");
 let dummyDiv = document.getElementById("dummy");
@@ -80,10 +79,21 @@ function loadEpisode(i) {
 	currentBase = episodes[index];
 	if (!currentBase) return;
 
+	function createObjectURL(object) {
+		return window.URL ? window.URL.createObjectURL(object) : window.webkitURL.createObjectURL(object);
+	}
+
 	fetch(`/video/${currentBase}`)
-		.then((res) => res.blob())
-		.then((blob) => {
-			source.src = URL.createObjectURL(blob);
+		.then((res) => {
+			if (!res.ok) {
+				throw new Error("Video not found");
+			}
+			res.blob().then((blob) => {
+				video.src = createObjectURL(blob);
+			});
+		})
+		.catch((err) => {
+			console.error("Error:", err);
 		});
 
 	fetch(`/subtitles/${currentBase}`)
@@ -127,8 +137,7 @@ setInterval(() => {
 // -----------------------------------------------------
 //#region toggles
 
-function togglePlay(e) {
-	e.preventDefault();
+function togglePlay() {
 	if (video.paused) {
 		video.play();
 		userPause = false;
@@ -196,7 +205,8 @@ function toggleHelp() {
 document.addEventListener("keydown", (e) => {
 	switch (e.key) {
 		case " ":
-			togglePlay(e);
+			e.preventDefault();
+			togglePlay();
 			break;
 		case "f":
 		case "F":
